@@ -16,10 +16,10 @@ def load_data():
     df['날짜'] = pd.to_datetime(df['날짜'])
     df.set_index('날짜', inplace=True)
 
-    start_date = '2020-01-20'
-    end_date = '2022-05-31'
-    df = df[df.index >= start_date]
-    df = df[df.index <= end_date]
+    # start_date = '2022-01-20'
+    # end_date = '2022-06-01'
+    # df = df[df.index >= start_date]
+    # df = df[df.index <= end_date]
 
     total_search = df['총 검색량']
     df_daily = total_search.resample('D').sum()
@@ -49,13 +49,15 @@ def render_sidebar():
                              })
     return choose
 
-def render_chart(df):
+def render_chart(df, default_year=2020):
     st.header('한달살이 검색량 그래프')
     st.markdown("*[출처] 키워드사운드 : https://keywordsound.com/*")
     st.write("---")
-    st.line_chart(df)
-    st.markdown('22년 5월 이후부터 코로나 감소')
-    st.markdown('~~정책때문에 이때 많이 늘었는데, 한달살이에 대한 수요는 꾸준히 있다.')
+    year = st.selectbox('연도를 선택하세요:', options=[2020, 2021, 2022, 2023])
+    df_year = df[df.index.year == year]
+    st.line_chart(df_year)
+    st.markdown(f'**기간 : {year}.01 ~ {year}.12**')
+
 
 def render_bar_chart(df):
     st.header('대전시 10~30대 인구수')
@@ -98,7 +100,7 @@ if __name__ == "__main__":
     choose = render_sidebar()
 
     if choose == "한달살이 검색량":
-        render_chart(df_daily)
+        render_chart(df_daily, 2020)  # 초기 값으로 2020년을 선택하도록 수정
     elif choose == "대전청년인구 감소추이":
         render_bar_chart(df_population)
     elif choose == "연도별 빈집 개수 추이":
