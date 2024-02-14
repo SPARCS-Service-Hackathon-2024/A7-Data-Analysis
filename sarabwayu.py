@@ -2,7 +2,6 @@ import pandas as pd
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
 from wordcloud import WordCloud
 import json
 import matplotlib
@@ -33,6 +32,10 @@ def load_num_data():
     df = pd.read_excel('빈집_현황_조회.xls')
     return df
 
+def load_local_num_data():
+    df = pd.read_csv('대전시_빈집비율.csv', encoding='cp949')
+    return df
+
 def load_apartment_info():
     with open('apartment_info.jsonl', 'r', encoding='utf-8') as f:
         data = [json.loads(line) for line in f]
@@ -58,7 +61,8 @@ def render_chart(df, default_year=2020):
     st.write("---")
     year = st.selectbox('연도를 선택하세요:', options=[2020, 2021, 2022, 2023])
     df_year = df[df.index.year == year]
-    st.line_chart(df_year)
+
+    st.line_chart(df_year, color="#864AE1")
     st.markdown(f'**기간 : {year}.01 ~ {year}.12**')
 
 def render_bar_chart(df):
@@ -68,18 +72,14 @@ def render_bar_chart(df):
     df['날짜'] = pd.to_datetime(df['날짜'], format='%Y년%m월') 
     df.set_index('날짜', inplace=True)
 
-    scaler = MinMaxScaler()
-    df_normalized = scaler.fit_transform(df)
-    df_normalized = pd.DataFrame(df_normalized, index=df.index, columns=[col+'_normalized' for col in df.columns])
-    
-    df_with_normalized = pd.concat([df, df_normalized], axis=1)
-    
-    st.bar_chart(df_normalized)
+    fig, ax = plt.subplots()
+    ax.plot(df.index, df['인구수'], marker='o',color='#864AE1')
+    ax.set_title('인구 변화 그래프')
+    ax.set_xlabel('날짜')
+    ax.set_ylabel('인구수')
+    ax.grid(True)
 
-    col1, col2 = st.columns(2)
-    col1.write(df_with_normalized)
-    col2.markdown("원데이터 분포를 유지하면서 정규화를 하기 위해 MinMaxScaler를 이용하여 각 데이터 값들은 0과 1 사이의 값을 가집니다.")
-    col2.write("그래프를 살펴보면, 대전시의 10~30대 인구수가 시간이 지남에 따라 감소하는 경향을 보입니다.")
+    st.pyplot(fig)
 
 def render_wordcloud(data):
     st.header("대전 집 현황")
@@ -110,9 +110,15 @@ def num_year(df):
     df['비율'] = (df['1등급(양호)'] + df['2등급(일반)']) / df['전체 빈집수']
     df_sorted = df.sort_values(by='비율', ascending=False)
 
+    df_sorted.index = df_sorted.index.str.replace('광역시', '')
+    df_sorted.index = df_sorted.index.str.replace('특별자치시도', '')
+    df_sorted.index = df_sorted.index.str.replace('특별자치시', '')
+    df_sorted.index = df_sorted.index.str.replace('특별자치도', '')
+    df_sorted.index = df_sorted.index.str.replace('특별시', '')
+
     n = len(df_sorted)
     gradient_colors = [np.array(start_color) + (np.array(end_color) - np.array(start_color)) * i / (n - 1) for i in range(n)]
-    gradient_colors = [tuple(c / 255 for c in color) for color in gradient_colors]  # matplotlib에서 사용할 수 있도록 정규화
+    gradient_colors = [tuple(c / 255 for c in color) for color in gradient_colors]
 
     fig, ax = plt.subplots()
     ax.bar(df_sorted.index, df_sorted['비율'], color=gradient_colors)
@@ -120,7 +126,36 @@ def num_year(df):
     ax.set_xlabel('지역')
     ax.set_ylabel('1,2등급 비율')
 
+    ax.tick_params(axis='x', labelsize=8)
+    ax.set_xticklabels([label[:2] + '\n' + label[2:] if len(label) > 2 else label for label in df_sorted.index])
     st.pyplot(fig)
+
+
+def local_num_year(df):
+    df.set_index('행정구역별(시군구)',inplace=True)
+    fig, ax1 = plt.subplots()
+
+    color = '#864AE1'
+    ax1.set_xlabel('날짜')
+    ax1.set_ylabel('빈집비율', color=color)
+    ax1.plot(df.index, df['빈집비율'], marker='o', color=color, label='빈집비율')
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    ax2 = ax1.twinx()
+    color = '#E14A86'
+    ax2.set_ylabel('빈집수', color=color)
+    ax2.plot(df.index, df['빈집수'], marker='^', color=color, label='빈집수')
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    plt.title('대전')
+
+    lines, labels = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines + lines2, labels + labels2, loc='upper left')
+    ax1.grid(True)
+    
+    st.pyplot(fig)
+
 
 start_color = hex_to_rgb("#5A25AA")
 end_color = hex_to_rgb("#DC88FF")
@@ -130,6 +165,7 @@ if __name__ == "__main__":
     df_population = load_population_data()
     apartment_info = load_apartment_info()
     df_num = load_num_data()
+    df_local_num = load_local_num_data()
     choose = render_sidebar()
 
     if choose == "한달살이 검색량":
@@ -138,6 +174,7 @@ if __name__ == "__main__":
         render_bar_chart(df_population)
     elif choose == "연도별 빈집 개수 추이":
         num_year(df_num)
+        local_num_year(df_local_num)
     elif choose == "한달살이 할 때 중요하게 생각하는 요소":
         st.header('한달살이 할 때 중요하게 생각하는 요소')
     elif choose == "한달살이 후에 해당 지역에 거주할 의향":
