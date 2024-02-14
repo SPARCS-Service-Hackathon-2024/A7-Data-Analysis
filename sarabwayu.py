@@ -1,25 +1,24 @@
 import pandas as pd
 import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from wordcloud import WordCloud
 import json
+import matplotlib
 
 from matplotlib import font_manager, rc
 from streamlit_option_menu import option_menu
 
-font_path = "./font/NotosansKR-Regular.ttf"
-font = font_manager.FontProperties(fname=font_path).get_name()
-rc('font', family=font)
+font_path = "C:/Users/USER/AppData/Local/Microsoft/Windows/Fonts/NotoSansKR-Regular.ttf"
+
+matplotlib.rcParams['font.family'] ='Malgun Gothic'
+matplotlib.rcParams['axes.unicode_minus'] =False
 
 def load_data():
     df = pd.read_excel('키워드사운드_한달살이_검색량.xlsx')
     df['날짜'] = pd.to_datetime(df['날짜'])
     df.set_index('날짜', inplace=True)
-
-    # start_date = '2022-01-20'
-    # end_date = '2022-06-01'
-    # df = df[df.index >= start_date]
-    # df = df[df.index <= end_date]
 
     total_search = df['총 검색량']
     df_daily = total_search.resample('D').sum()
@@ -28,6 +27,10 @@ def load_data():
 
 def load_population_data():
     df = pd.read_csv('대전시_10~30대_인구수.csv')
+    return df
+
+def load_num_data():
+    df = pd.read_excel('빈집_현황_조회.xls')
     return df
 
 def load_apartment_info():
@@ -58,7 +61,6 @@ def render_chart(df, default_year=2020):
     st.line_chart(df_year)
     st.markdown(f'**기간 : {year}.01 ~ {year}.12**')
 
-
 def render_bar_chart(df):
     st.header('대전시 10~30대 인구수')
     st.markdown("*[출처] 공공데이터포털: 통계청_SGIS오픈플랫폼_인구통계*")
@@ -81,7 +83,7 @@ def render_bar_chart(df):
 
 def render_wordcloud(data):
     st.header("대전 집 현황")
-    st.markdown("*[출처] 네이버페이 부동산: https://m.land.naver.com/*")
+    st.markdown("*[출처] 네이버페이 부동산 크롤링 데이터: https://m.land.naver.com/*")
     st.write("---")
     detail_descriptions = [item.get('detailDescription', '').replace('없음', '').replace('광고', '').replace('표시', '').replace('중개대상물의', '').replace('명시사항', '').replace('건축물용도', '').replace('방향기준', '') for item in data]
     article_descriptions = [item.get('articleDescription', '') for item in data]
@@ -93,18 +95,49 @@ def render_wordcloud(data):
     wordcloud = WordCloud(width=800, height=400, background_color='white', font_path=font_path, prefer_horizontal=0.9).generate(text)
     st.image(wordcloud.to_array(), use_column_width=True)
 
+def hex_to_rgb(hex_color):
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+def num_year(df):
+    st.header('연도별 빈집 개수 추이')
+    st.write("---")
+    df.set_index('지역', inplace=True)
+    col = df.columns
+    for i in col:
+        df[i] = df[i].str.replace(',', '')
+        df[i] = df[i].astype(int)
+    df['비율'] = (df['1등급(양호)'] + df['2등급(일반)']) / df['전체 빈집수']
+    df_sorted = df.sort_values(by='비율', ascending=False)
+
+    n = len(df_sorted)
+    gradient_colors = [np.array(start_color) + (np.array(end_color) - np.array(start_color)) * i / (n - 1) for i in range(n)]
+    gradient_colors = [tuple(c / 255 for c in color) for color in gradient_colors]  # matplotlib에서 사용할 수 있도록 정규화
+
+    fig, ax = plt.subplots()
+    ax.bar(df_sorted.index, df_sorted['비율'], color=gradient_colors)
+    ax.set_title('점수 분포')
+    ax.set_xlabel('지역')
+    ax.set_ylabel('1,2등급 비율')
+
+    st.pyplot(fig)
+
+start_color = hex_to_rgb("#5A25AA")
+end_color = hex_to_rgb("#DC88FF")
+
 if __name__ == "__main__":
     df_daily = load_data()
     df_population = load_population_data()
     apartment_info = load_apartment_info()
+    df_num = load_num_data()
     choose = render_sidebar()
 
     if choose == "한달살이 검색량":
-        render_chart(df_daily, 2020)  # 초기 값으로 2020년을 선택하도록 수정
+        render_chart(df_daily, 2020)
     elif choose == "대전청년인구 감소추이":
         render_bar_chart(df_population)
     elif choose == "연도별 빈집 개수 추이":
-        st.header('연도별 빈집 개수 추이')
+        num_year(df_num)
     elif choose == "한달살이 할 때 중요하게 생각하는 요소":
         st.header('한달살이 할 때 중요하게 생각하는 요소')
     elif choose == "한달살이 후에 해당 지역에 거주할 의향":
