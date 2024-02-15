@@ -1,11 +1,13 @@
 import pandas as pd
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
-from wordcloud import WordCloud
 import json
 import matplotlib
+import re
+import matplotlib.pyplot as plt
 
+from wordcloud import WordCloud
+from collections import Counter
 from matplotlib import font_manager, rc
 from streamlit_option_menu import option_menu
 
@@ -41,10 +43,18 @@ def load_apartment_info():
         data = [json.loads(line) for line in f]
     return data
 
+def load_survey():
+    df = pd.read_excel('Sparcs_해커톤_설문조사_응답.xlsx')
+    return df
+
+def load_job_change():
+    df = pd.read_csv('대전광역시_직업_분야별_변화추이.csv', encoding='cp949')
+    return df
+
 def render_sidebar():
     with st.sidebar:
-        choose = option_menu("데이터셋", ["한달살이 검색량", "대전청년인구 감소추이", "연도별 빈집 개수 추이", "한달살이 할 때 중요하게 생각하는 요소", "한달살이 후에 해당 지역에 거주할 의향", "대전 집 현황"],
-                             icons=['house', 'people', 'kanban', ''],
+        choose = option_menu("데이터셋", ["한달살이 검색량", "대전청년인구 감소추이", "연도별 빈집 개수 추이", "설문조사", "대전 집 현황", "대전 직업 분야별 변화추이"],
+                             icons=['house', 'people', 'kanban', 'check-square', 'graph-down', 'person'],
                              menu_icon="메뉴 타이틀 아이콘", default_index=0,
                              styles={
                                  "container": {"padding": "5!important", "background-color": "#fafafa"},
@@ -83,7 +93,7 @@ def render_bar_chart(df):
 
 def render_wordcloud(data):
     st.header("대전 집 현황")
-    st.markdown("*[출처] 네이버페이 부동산 크롤링 데이터: https://m.land.naver.com/*")
+    st.markdown("*[출처] 네이버페이 부동산 데이터: https://m.land.naver.com/, 크롤링일자 : 2024.02.14*")
     st.write("---")
     detail_descriptions = [item.get('detailDescription', '').replace('없음', '').replace('광고', '').replace('표시', '').replace('중개대상물의', '').replace('명시사항', '').replace('건축물용도', '').replace('방향기준', '') for item in data]
     article_descriptions = [item.get('articleDescription', '') for item in data]
@@ -120,14 +130,16 @@ def num_year(df):
     gradient_colors = [np.array(start_color) + (np.array(end_color) - np.array(start_color)) * i / (n - 1) for i in range(n)]
     gradient_colors = [tuple(c / 255 for c in color) for color in gradient_colors]
 
+    cleaned_labels = [re.sub(r'\(\d+~\d+\)', '', label) for label in df_sorted.index]
     fig, ax = plt.subplots()
-    ax.bar(df_sorted.index, df_sorted['비율'], color=gradient_colors)
+
+    ax.bar(df.index, df_sorted['비율'], color=gradient_colors)
     ax.set_title('점수 분포')
     ax.set_xlabel('지역')
-    ax.set_ylabel('1,2등급 비율')
+    ax.set_ylabel('1, 2등급 비율')
 
     ax.tick_params(axis='x', labelsize=8)
-    ax.set_xticklabels([label[:2] + '\n' + label[2:] if len(label) > 2 else label for label in df_sorted.index])
+    ax.set_xticklabels([label[:2] + '\n' + label[2:] if len(label) > 2 else label for label in cleaned_labels])
     st.pyplot(fig)
 
 
@@ -156,6 +168,97 @@ def local_num_year(df):
     
     st.pyplot(fig)
 
+def survey(df):
+    st.header('설문조사')
+    filtered = df[df[' 한달살이 이후에 해당 지역에서 더 거주하고 싶다는 생각이 얼마나 들었나요?'].isin([1,2,3,4,5])]
+    value_counts = filtered[' 한달살이 이후에 해당 지역에서 더 거주하고 싶다는 생각이 얼마나 들었나요?'].value_counts()
+
+    values = range(1, 6) 
+    heights = [0, 3, 2, 5, 0] 
+
+    fig, ax = plt.subplots()
+    ax.bar(values, heights, color='#864AE1') 
+    ax.set_title('한달살이 이후 더 거주할 의향이 얼마나 있나요?')
+    ax.set_xlabel('Value')
+    ax.set_ylabel('Frequency')
+
+    st.pyplot(fig)
+
+    # 설문1
+    all_values = []
+    df['한달살이 지역을 선택할 때 \n가장 중요한 것은 어떤 것이라고 생각하나요?\n(중복 선택 가능)'].str.split(',').apply(all_values.extend)
+
+    value_counts1 = Counter(all_values)
+
+    # 설문2
+    all_values = []
+    df['타지역과 대전을 비교했을 때, \n대전만의 강점은 어떤 것이 있다고 생각하나요?'].str.split(',').apply(all_values.extend)
+
+    value_counts2 = Counter(all_values)
+
+    all_values = []
+    def extend_non_empty_values(row):
+        # row가 문자열인 경우에만 처리
+        if isinstance(row, str):
+            non_empty_values = [value for value in row.split(',') if value and value.strip()]
+            all_values.extend(non_empty_values)
+
+    # NaN 값이나 누락된 값이 있을 수 있는 컬럼에 대해 처리
+    df['한달살기를 고려한다면,\n다음 선택지 중에서 대전에 부족한 부분은 어떤 것이 있나요?\n(중복 선택 가능)'].apply(extend_non_empty_values)
+
+    # 모든 값의 빈도 계산
+    value_counts3 = Counter(all_values)
+
+    xlist = ['교통 편의성','거주 비용 및 시설','관광 인프라','원하는 기간 동안의 한달살이 서비스','편의 시설']  # 1부터 5까지의 값
+    ylist1 = [25,16,30,15,12]
+    ylist3 = [6,22,18,24,3]
+
+    fig, ax = plt.subplots()
+    ax.bar(xlist, ylist3,color='#864AE1')
+    ax.set_title('대전에 한달살이 서비스를 하기 위해서 필요한 것은 어떤 것이 있을까요?')
+    ax.set_xlabel('Value')
+    ax.set_ylabel('Frequency')
+
+    ax.tick_params(axis='x', labelsize=8)
+    ax.set_xticklabels([label[:5] + '\n' + label[5:] if len(label) > 5 else label for label in xlist])
+    
+    st.pyplot(fig)
+
+
+    category_counts = df['대전의 부족한 문제가 보완된다면\n대전에서 한달살이를 할 의향이 있나요?'].value_counts()
+
+    fig, ax = plt.subplots()
+    ax.set_title('대전의 부족한 문제가 보완된다면\n대전에서 한달살이를 할 의향이 있나요?')
+    ax.pie(category_counts, labels=category_counts.index, autopct='%1.1f%%', startangle=90, colors=['#864AE1','gold'])
+    ax.axis('equal')
+
+    st.pyplot(fig)
+
+def job_change(df):
+    st.header('대전광역시 직업 분야별 변화추이')
+    df.set_index('산업별',inplace=True)
+    df['사업체 변화율'] = df['2022 사업체 수']/ df['2020 사업체 수']
+    df['종사자 변화율'] = df['2022 종사자수']/ df['2020 종사자 수']
+    df['매출액 변화율'] = df['2022 매출액']/ df['2020 매출액']
+    df['변화율 합'] = df['사업체 변화율'] + df['종사자 변화율'] + df['매출액 변화율']
+    df['변화율 합'] = df['변화율 합'] -3
+    df_sorted = df.sort_values(by = '변화율 합',ascending = False)
+
+    n = len(df_sorted)
+    gradient_colors = [np.array(start_color) + (np.array(end_color) - np.array(start_color)) * i / (n - 1) for i in range(n)]
+    gradient_colors = [tuple(c / 255 for c in color) for color in gradient_colors]
+
+    fig, ax = plt.subplots()
+    ax.bar(df_sorted.index, df_sorted['변화율 합'], color=gradient_colors)
+    ax.set_title('성장률 분석')
+    ax.set_xlabel('분야')
+    ax.set_ylabel('성장률')
+
+    ax.tick_params(axis='x', labelsize=8)
+    cleaned_labels = [re.sub(r'\(\d+~\d+\)', '', label) for label in df_sorted.index]
+    ax.set_xticklabels([label[:2] + '\n' + label[2:] if len(label) > 2 else label for label in df_sorted.index])
+    st.pyplot(fig)
+
 
 start_color = hex_to_rgb("#5A25AA")
 end_color = hex_to_rgb("#DC88FF")
@@ -166,6 +269,8 @@ if __name__ == "__main__":
     apartment_info = load_apartment_info()
     df_num = load_num_data()
     df_local_num = load_local_num_data()
+    df_survey = load_survey()
+    df_job_change = load_job_change()
     choose = render_sidebar()
 
     if choose == "한달살이 검색량":
@@ -175,9 +280,9 @@ if __name__ == "__main__":
     elif choose == "연도별 빈집 개수 추이":
         num_year(df_num)
         local_num_year(df_local_num)
-    elif choose == "한달살이 할 때 중요하게 생각하는 요소":
-        st.header('한달살이 할 때 중요하게 생각하는 요소')
-    elif choose == "한달살이 후에 해당 지역에 거주할 의향":
-        st.header('한달살이 후에 해당 지역에 거주할 의향')
+    elif choose == "설문조사":
+        survey(df_survey)
     elif choose == "대전 집 현황":
         render_wordcloud(apartment_info)
+    elif choose == "대전 직업 분야별 변화추이":
+        job_change(df_job_change)
