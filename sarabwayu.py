@@ -95,7 +95,7 @@ def render_wordcloud(data):
     st.header("대전 집 현황")
     st.markdown("*[출처] 네이버페이 부동산 데이터: https://m.land.naver.com/, 크롤링일자 : 2024.02.14*")
     st.write("---")
-    detail_descriptions = [item.get('detailDescription', '').replace('없음', '').replace('광고', '').replace('표시', '').replace('중개대상물의', '').replace('명시사항', '').replace('건축물용도', '').replace('방향기준', '') for item in data]
+    detail_descriptions = [item.get('detailDescription', '').replace('없음', '').replace('광고', '').replace('표시', '').replace('중개대상물의', '').replace('명시사항', '').replace('건축물용도', '').replace('방향기준', '').replace('입주가능일', '').replace('사용승인일', '').replace('매물상세', '').replace('개설등록번호', '') for item in data]
     article_descriptions = [item.get('articleDescription', '') for item in data]
     tag_lists = [', '.join(item.get('tagList', [])) for item in data]
 
@@ -256,9 +256,8 @@ def job_change(df):
 
     ax.tick_params(axis='x', labelsize=8)
     cleaned_labels = [re.sub(r'\(\d+~\d+\)', '', label) for label in df_sorted.index]
-    ax.set_xticklabels([label[:2] + '\n' + label[2:] if len(label) > 2 else label for label in df_sorted.index])
+    ax.set_xticklabels([label[:4] + '\n' + label[4:] if len(label) > 4 else label for label in cleaned_labels], rotation=90)
     st.pyplot(fig)
-
 
 start_color = hex_to_rgb("#5A25AA")
 end_color = hex_to_rgb("#DC88FF")
