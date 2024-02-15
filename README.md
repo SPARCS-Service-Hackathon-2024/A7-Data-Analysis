@@ -97,6 +97,16 @@ walkTime와 studentCountPerTeacher는 아이가 있는 가구에 중요한 정�
 
 라벨링한 데이터로 [beomi/open-llama-2-ko-7b](https://huggingface.co/beomi/llama-2-ko-7b) 모델을 활용해 파인튜닝을 해줍니다. 클라우드의 GPU VRAM은 40GB정도지만, 학습시킬 데이터의 길이가 길기 때문에 양자화를 진행하여 학습을 진행합니다.
 
+[학습 코드](https://github.com/SPARCS-Service-Hackathon-2024/A7-Data-Analysis/blob/main/sarabwayu.ipynb)
+
+
+학습이 완료된 adapter 모델은 [taewan2002/srabwayu-rec-7b](https://huggingface.co/taewan2002/srabwayu-rec-7b) peft모델로 다운 받아서 사용할 수 있습니다.
+
+```
+adapter_model = "taewan2002/srabwayu-rec-7b"
+model = AutoPeftModelForCausalLM.from_pretrained(adapter_model, device_map="auto", torch_dtype="auto")
+tokenizer = LlamaTokenizerFast.from_pretrained(adapter_model, trust_remote_code=True)
+```
 
 ### 모델 활용
 
